@@ -15,15 +15,25 @@ import (
 // LightMux is the main struct that manages the HTTP server and routing.
 // It holds a reference to an http.Server and an http.ServeMux for handler registration.
 type LightMux struct {
-	server *http.Server   // Should be passed through constructor
-	mux    *http.ServeMux // ServeMux that will serve as holder for handlers
+	server *http.Server   // HTTP server instance managed by LightMux.
+	mux    *http.ServeMux // ServeMux that will serve as holder for handlers.
+
+	// routeStack holds the stack of registered routes.
+	routeStack []*Route
+
+	// routeMap is a map for quick lookup of registered route patterns.
+	routeMap map[string]struct{}
+
+	// globalMiddlewareStack holds the stack of global middlewares applied to all routes.
+	globalMiddlewareStack []Middleware
 }
 
 // NewLightMux creates and returns a new LightMux instance using the provided http.Server.
 func NewLightMux(server *http.Server) *LightMux {
 	return &LightMux{
-		server: server,
-		mux:    http.NewServeMux(),
+		server:   server,
+		mux:      http.NewServeMux(),
+		routeMap: make(map[string]struct{}),
 	}
 }
 

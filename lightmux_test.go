@@ -7,7 +7,6 @@ import (
 )
 
 func TestMiddlewareExecution(t *testing.T) {
-	defer clearUpLightMux()
 
 	var called []string
 
@@ -50,16 +49,15 @@ func TestMiddlewareExecution(t *testing.T) {
 }
 
 func TestHandlerResponse(t *testing.T) {
-	defer clearUpLightMux()
 
 	var called []string
 
-	foo := func (w http.ResponseWriter, r *http.Request)  {
+	foo := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		called = append(called, "foo")
 	}
 
-	bar := func (w http.ResponseWriter, r *http.Request)  {
+	bar := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		called = append(called, "bar")
 	}
@@ -91,7 +89,6 @@ func TestHandlerResponse(t *testing.T) {
 }
 
 func TestRouteDuplicatePanic(t *testing.T) {
-	defer clearUpLightMux()
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -108,7 +105,6 @@ func TestRouteDuplicatePanic(t *testing.T) {
 }
 
 func TestRouteHandlerDuplicatePanic(t *testing.T) {
-	defer clearUpLightMux()
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -125,7 +121,6 @@ func TestRouteHandlerDuplicatePanic(t *testing.T) {
 }
 
 func TestRouteDifferentHandler(t *testing.T) {
-	defer clearUpLightMux()
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -142,9 +137,8 @@ func TestRouteDifferentHandler(t *testing.T) {
 }
 
 func TestServerState(t *testing.T) {
-	defer clearUpLightMux()
 
-	logMiddleware := func(next http.Handler) http.Handler {
+	logMiddleware := func(next http.HandlerFunc) http.HandlerFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			t.Log("log")
 			next.ServeHTTP(w, r)
@@ -159,7 +153,7 @@ func TestServerState(t *testing.T) {
 
 	lmux := NewLightMux(&http.Server{})
 	lmux.Use(logMiddleware)
-	route := lmux.NewRoute("/call",  authMiddleware)
+	route := lmux.NewRoute("/call", authMiddleware)
 	route.Handle(http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -172,16 +166,15 @@ func TestServerState(t *testing.T) {
 }
 
 func Test404HandlerResponse(t *testing.T) {
-	defer clearUpLightMux()
 
 	var called string
 
-	foo := func (w http.ResponseWriter, r *http.Request)  {
+	foo := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		called = "foo"
 	}
 
-	bar := func (w http.ResponseWriter, r *http.Request)  {
+	bar := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		called = "bar"
 	}
@@ -203,18 +196,4 @@ func Test404HandlerResponse(t *testing.T) {
 	if called != "bar" {
 		t.Fatalf("unexpected called value: %s, wanted: bar", called)
 	}
-}
-
-func clearUpLightMux()  {
-	clearRoutes()
-	clearMiddlewares()
-}
-
-func clearRoutes() {
-	routeStack = nil
-	routeMap = make(map[string]struct{})
-}
-
-func clearMiddlewares()  {
-	middlewareStack = nil
 }

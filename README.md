@@ -29,11 +29,11 @@ func main() {
     mux := lightmux.NewLightMux(server)
 
     // Global middleware example
-    mux.Use(func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    mux.Use(func(next http.HandlerFunc) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
             // Logging, authentication, etc.
-            next.ServeHTTP(w, r)
-        })
+            next(w, r)
+        }
     })
 
     // Route with middleware
@@ -53,13 +53,9 @@ func main() {
 
 ### Types
 
-#### `type GlobalMiddlewareFunc func(http.Handler) http.Handler`
-
-Defines a function type for global HTTP middleware.
-
 #### `type Middleware func(http.HandlerFunc) http.HandlerFunc`
 
-Defines a function to process middleware logic for HTTP handlers.
+Defines a function type for HTTP middleware (both global and per-route).
 
 #### `type LightMux struct`
 
@@ -74,6 +70,18 @@ type Route struct {
     Path        string
     Methods     map[string]http.HandlerFunc
     Middlewares []Middleware
+}
+```
+
+#### `type RouteGroup struct`
+
+Represents a group of routes sharing a common path prefix and optional middlewares.
+
+```go
+type RouteGroup struct {
+    Prefix      string
+    Middlewares []Middleware
+    // ...other fields...
 }
 ```
 
@@ -97,11 +105,23 @@ Returns the internal `http.ServeMux` used by `LightMux` for handler registration
 
 #### `func (l *LightMux) NewRoute(path string, middlewares ...Middleware) *Route`
 
-Creates a new `Route` with the given path and optional middlewares.
+Creates a new `Route` with the given path and optional per-route middlewares.
+
+#### `func (l *LightMux) Group(prefix string, middlewares ...Middleware) *RouteGroup`
+
+Creates a new `RouteGroup` with the given path prefix and optional middlewares.
+
+#### `func (g *RouteGroup) NewRoute(path string, middlewares ...Middleware) *Route`
+
+Creates a new `Route` within the group, combining the group's prefix with the given path and applying both group and route middlewares.
+
+#### `func (g *RouteGroup) Use(middlewares ...Middleware)`
+
+Adds middleware(s) to the group, to be applied to all routes within the group.
 
 #### `func (l *LightMux) PrintMiddlewareInfo()`
 
-Prints the count of registered middlewares.
+Prints the count of registered global and per-route middlewares.
 
 #### `func (l *LightMux) PrintRoutes()`
 
@@ -111,13 +131,17 @@ Prints all registered routes and their supported methods.
 
 Applies routes and global middlewares, then starts the HTTP server. Returns any error encountered while running the server. Shuts down gracefully when the server is stopped.
 
-#### `func (l *LightMux) Use(middlewares ...GlobalMiddlewareFunc)`
+#### `func (l *LightMux) Use(middlewares ...Middleware)`
 
-Registers global middleware functions to be applied to all incoming HTTP requests handled by the server. Useful for logging, authentication, etc. Changes are applied after running `LightMux.Run`.
+Registers global middleware functions to be applied to all incoming HTTP requests handled by the server. Useful for logging, authentication, etc. Global middlewares are applied in the order they are registered, before any per-route middlewares.
 
 #### `func (r *Route) Handle(method string, handler http.HandlerFunc)`
 
 Registers a handler for a specific HTTP method on the route.
+
+#### `func (r *Route) Use(middlewares ...Middleware)`
+
+Adds middleware(s) to the route, to be applied only to this route.
 
 ---
 
