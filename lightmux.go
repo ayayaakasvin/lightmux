@@ -55,8 +55,10 @@ func (l *LightMux) Run() error {
 
 	go func() {
 		log.Println("Starting LightMux on", l.server.Addr)
-		if err := l.server.ListenAndServe(); err != nil {
+		if err := l.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("ListenAndServe error: %s\n", err)
+		} else if err == http.ErrServerClosed {
+			log.Println("Server closed gracefully.")
 		}
 	}()
 
