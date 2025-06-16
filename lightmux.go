@@ -75,3 +75,41 @@ func (l *LightMux) Run() error {
 	log.Println("Server shutdown complete.")
 	return nil
 }
+
+// RunTLS starts the HTTP server with TLS support using the provided certificate and key files.
+// It applies all registered routes and global middlewares before starting the server.
+// The server listens for termination signals (e.g., SIGTERM) and shuts down gracefully.
+// Parameters:
+// - certFile: Path to the TLS certificate file.
+// - keyFile: Path to the TLS key file.
+// Returns:
+// - An error if the server fails to start or shut down properly.
+func (l *LightMux) RunTLS(certFile, keyFile string) error {
+	l.ApplyRoutes()
+	l.ApplyGlobalMiddlewares()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		log.Println("Starting LightMux on", l.server.Addr)
+		if err := l.server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("ListenAndServeTLS error: %s\n", err)
+		} else if err == http.ErrServerClosed {
+			log.Println("Server closed gracefully.")
+		}
+	}()
+
+	<-stop
+	log.Println("Shutdown signal received, shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	if err := l.server.Shutdown(ctx); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Shutdown failed: %v", err)
+	}
+
+	log.Println("Server shutdown complete.")
+	return nil
+}
