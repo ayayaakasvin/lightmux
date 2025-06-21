@@ -97,6 +97,7 @@ func (l *LightMux) RunTLS(certFile, keyFile string) error {
 			log.Fatalf("ListenAndServeTLS error: %s\n", err)
 		} else if err == http.ErrServerClosed {
 			log.Println("Server closed gracefully.")
+			os.Exit(0)
 		}
 	}()
 
