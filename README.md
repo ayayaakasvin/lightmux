@@ -67,9 +67,9 @@ Represents an HTTP route with its path, supported methods, and middlewares.
 
 ```go
 type Route struct {
-    Path        string
-    Methods     map[string]http.Handler
-    Middlewares []Middleware
+	Path        	string
+	Methods     	map[string]http.Handler
+	Middlewares 	[]Middleware
 }
 ```
 
@@ -79,9 +79,9 @@ Represents a group of routes sharing a common path prefix and optional middlewar
 
 ```go
 type RouteGroup struct {
-    Prefix      string
-    Middlewares []Middleware
-    // ...other fields...
+	prefix      string
+	middlewares []Middleware
+	mux         *LightMux
 }
 ```
 
