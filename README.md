@@ -107,9 +107,13 @@ Returns the internal `http.ServeMux` used by `LightMux` for handler registration
 
 Creates a new `Route` with the given path and optional per-route middlewares.
 
-#### `func (l *LightMux) Group(prefix string, middlewares ...Middleware) *RouteGroup`
+#### `func (l *LightMux) NewGroup(prefix string, middlewares ...Middleware) *RouteGroup`
 
 Creates a new `RouteGroup` with the given path prefix and optional middlewares.
+
+#### `func (g *RouteGroup) ContinueGroup(prefix string, middlewares ...Middleware) *RouteGroup`
+
+Creates a new `RouteGroup` with the given path prefix and optional middlewares based on `g *RouteGroup`.
 
 #### `func (g *RouteGroup) NewRoute(path string, middlewares ...Middleware) *Route`
 

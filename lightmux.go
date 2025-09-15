@@ -4,6 +4,8 @@ package lightmux
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -18,11 +20,8 @@ type LightMux struct {
 	server *http.Server   // HTTP server instance managed by LightMux.
 	mux    *http.ServeMux // ServeMux that will serve as holder for handlers.
 
-	// routeStack holds the stack of registered routes.
-	routeStack []*Route
-
 	// routeMap is a map for quick lookup of registered route patterns.
-	routeMap map[string]struct{}
+	routeMap map[string]*Route
 
 	// globalMiddlewareStack holds the stack of global middlewares applied to all routes.
 	globalMiddlewareStack []Middleware
@@ -33,7 +32,7 @@ func NewLightMux(server *http.Server) *LightMux {
 	return &LightMux{
 		server:   server,
 		mux:      http.NewServeMux(),
-		routeMap: make(map[string]struct{}),
+		routeMap: make(map[string]*Route),
 	}
 }
 
@@ -41,6 +40,44 @@ func NewLightMux(server *http.Server) *LightMux {
 // This allows direct access to the underlying ServeMux for advanced routing or customization(e.g: adding custom 404 handler).
 func (l *LightMux) Mux() *http.ServeMux {
 	return l.mux
+}
+
+// ApplyRoutes registers all routes that have been created with NewRoute.
+//
+// Run() calls this before starting HTTP server, and before applying any global middlewares.
+// This ensures all route handlers are registered to the underlying mux.
+func (l *LightMux) ApplyRoutes() {
+	for _, route := range l.routeMap {
+		route := route
+		allowed := allowedMethodsJoin(route.Methods)
+
+		l.mux.HandleFunc(route.Path, func(w http.ResponseWriter, r *http.Request) {
+			if handler, ok := route.Methods[r.Method]; ok {
+				handler.ServeHTTP(w, r)
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": fmt.Sprintf("%s method is not allowed, allowed methods for %s:[%s]", r.Method, r.URL.Path, allowed),
+				})
+				return
+			}
+		})
+	}
+}
+
+// PrintRoutes prints all registered routes and their supported methods.
+func (l *LightMux) PrintRoutes() {
+	for _, r := range l.routeMap {
+		fmt.Printf("Route: %s\n", r.Path)
+		for method, handler := range r.Methods {
+			fmt.Printf("\t- %s (handler: %s)\n", method, getFuncName(handler))
+		}
+		fmt.Printf("\tMiddlewares: %d\n", len(r.Middlewares))
+		for i, mw := range r.Middlewares {
+			fmt.Printf("\t\t%d: %T (%s)\n", i+1, mw, getFuncName(mw))
+		}
+	}
 }
 
 // Run applies routes and global middlewares, then starts the HTTP server.
@@ -59,6 +96,7 @@ func (l *LightMux) Run() error {
 			log.Fatalf("ListenAndServe error: %s\n", err)
 		} else if err == http.ErrServerClosed {
 			log.Println("Server closed gracefully.")
+			os.Exit(0)
 		}
 	}()
 
