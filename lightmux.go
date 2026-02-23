@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 )
 
@@ -80,107 +77,78 @@ func (l *LightMux) PrintRoutes() {
 	}
 }
 
-// Run applies routes and global middlewares, then starts the HTTP server.
+// Run starts the HTTP server and blocks until the server stops.
 // It returns any error encountered while running the server.
-// When server is stopped, it shutdowns gracefully.
-func (l *LightMux) Run() error {
+// The caller is responsible for managing context cancellation and graceful shutdown.
+func (l *LightMux) Run(ctx context.Context) error {
 	l.ApplyRoutes()
 	l.ApplyGlobalMiddlewares()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	errCh := make(chan error, 1)
 
 	go func() {
 		log.Println("Starting LightMux on", l.server.Addr)
 		if err := l.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("ListenAndServe error: %s\n", err)
-		} else if err == http.ErrServerClosed {
-			log.Println("Server closed gracefully.")
-			os.Exit(0)
+			errCh <- err
 		}
 	}()
 
-	<-stop
-	log.Println("Shutdown signal received, shutting down server...")
+	select {
+	case <-ctx.Done():
+		log.Println("Context cancelled, shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	if err := l.server.Shutdown(ctx); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Shutdown failed: %v", err)
-	}
-
-	log.Println("Server shutdown complete.")
-	return nil
-}
-
-// Same with *LightMux.Run(), but with custom context
-func (l *LightMux) RunContext(ctx context.Context) error {
-	l.ApplyRoutes()
-	l.ApplyGlobalMiddlewares()
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		log.Println("Starting LightMux on", l.server.Addr)
-		if err := l.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("ListenAndServe error: %s\n", err)
-		} else if err == http.ErrServerClosed {
-			log.Println("Server closed gracefully.")
-			os.Exit(0)
+		if err := l.server.Shutdown(shutdownCtx); err != nil {
+			return err
 		}
-	}()
 
-	<-stop
-	log.Println("Shutdown signal received, shutting down server...")
+		log.Println("Server shutdown complete.")
+		return nil
 
-	childCtx, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-
-	if err := l.server.Shutdown(childCtx); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Shutdown failed: %v", err)
+	case err := <-errCh:
+		return err
 	}
-
-	log.Println("Server shutdown complete.")
-	return nil
 }
 
-// RunTLS starts the HTTP server with TLS support using the provided certificate and key files.
+// RunTLS starts the HTTP server with TLS support.
 // It applies all registered routes and global middlewares before starting the server.
-// The server listens for termination signals (e.g., SIGTERM) and shuts down gracefully.
+// The caller is responsible for managing context cancellation and graceful shutdown.
 // Parameters:
+// - ctx: Context for managing server lifecycle.
 // - certFile: Path to the TLS certificate file.
 // - keyFile: Path to the TLS key file.
 // Returns:
 // - An error if the server fails to start or shut down properly.
-func (l *LightMux) RunTLS(certFile, keyFile string) error {
+func (l *LightMux) RunTLS(ctx context.Context, certFile, keyFile string) error {
 	l.ApplyRoutes()
 	l.ApplyGlobalMiddlewares()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	errCh := make(chan error, 1)
 
 	go func() {
 		log.Println("Starting LightMux on", l.server.Addr)
 		if err := l.server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("ListenAndServeTLS error: %s\n", err)
-		} else if err == http.ErrServerClosed {
-			log.Println("Server closed gracefully.")
-			os.Exit(0)
+			errCh <- err
 		}
 	}()
 
-	<-stop
-	log.Println("Shutdown signal received, shutting down server...")
+	select {
+	case <-ctx.Done():
+		log.Println("Context cancelled, shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	if err := l.server.Shutdown(ctx); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Shutdown failed: %v", err)
+		if err := l.server.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+
+		log.Println("Server shutdown complete.")
+		return nil
+
+	case err := <-errCh:
+		return err
 	}
-
-	log.Println("Server shutdown complete.")
-	return nil
 }

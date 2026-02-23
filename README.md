@@ -9,6 +9,7 @@
 - Global and per-route middleware
 - Easy integration with `http.Server`
 - Customizable via direct access to `http.ServeMux`
+- Context-based graceful shutdown
 
 ## Installation
 
@@ -20,7 +21,11 @@ go get github.com/ayayaakasvin/lightmux
 
 ```go
 import (
+    "context"
     "net/http"
+    "os"
+    "os/signal"
+    "syscall"
     "github.com/ayayaakasvin/lightmux"
 )
 
@@ -42,8 +47,23 @@ func main() {
         w.Write([]byte("Hello, world!"))
     })
 
+    // Handle graceful shutdown
+    stop := make(chan os.Signal, 1)
+    signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+    go func() {
+        <-stop
+        // Trigger shutdown via context cancellation
+    }()
+
+    ctx, cancel := context.WithCancel(context.Background())
+    go func() {
+        <-stop
+        cancel()
+    }()
+
     // Start server
-    if err := mux.Run(); err != nil {
+    if err := mux.Run(ctx); err != nil {
         panic(err)
     }
 }
@@ -131,9 +151,13 @@ Prints the count of registered global and per-route middlewares.
 
 Prints all registered routes and their supported methods.
 
-#### `func (l *LightMux) Run() error`
+#### `func (l *LightMux) Run(ctx context.Context) error`
 
-Applies routes and global middlewares, then starts the HTTP server. Returns any error encountered while running the server. Shuts down gracefully when the server is stopped.
+Applies routes and global middlewares, then starts the HTTP server. The caller is responsible for managing context cancellation and graceful shutdown. Returns any error encountered while running the server.
+
+#### `func (l *LightMux) RunTLS(ctx context.Context, certFile, keyFile string) error`
+
+Starts the HTTP server with TLS support using the provided certificate and key files. The caller is responsible for managing context cancellation and graceful shutdown. Returns any error encountered while running the server.
 
 #### `func (l *LightMux) Use(middlewares ...Middleware)`
 
